@@ -1,27 +1,62 @@
-import multiprocessing
-import multiprocessing.pool
+#!/usr/bin/env python
+# coding: utf-8
+
+# In[44]:
+
+
 import numpy as np
+import ray
+import sys
+sys.path.append("../channel")
+from AWGN import _AWGN
+sys.path.append("../turbo_code")
+from turbo_code import coding
 
-class MC():
-    def __init__(self):
-        super().__init__()
-        
-        self.TX_antenna=1
-        self.RX_antenna=1
-        self.MAX_ERR=8
-        self.EbNodB_start=-5
-        self.EbNodB_end=1
-        self.EbNodB_range=np.arange(self.EbNodB_start,self.EbNodB_end)
+cd=coding(100)
+ch=_AWGN()
 
-    @staticmethod
-    def output(inputs):
+
+# In[45]:
+
+
+'''
+#ray.initを一回だけ実行する
+def run_once(f):
+    def wrapper(*args, **kwargs):
+        if not wrapper.has_run:
+            wrapper.has_run = True
+            return f(*args, **kwargs)
+    wrapper.has_run = False
+    return wrapper
+
+@run_once
+def onece():
+    ray.init()
+'''
+ray.init()
+
+
+# In[47]:
+
+
+#毎回書き換える関数その2
+@ray.remote
+def output(K,EbNodB):
         '''
         #あるSNRで計算結果を出力する関数を作成
         #main_func must input 'EbNodB' and output 1D 'codeword' and 'EST_codeword'
         '''
-        main_func,\
-        EbNodB\
-        =inputs
+
+        #import module 
+        sys.path.append("../turbo_code")
+        import turbo_code
+        tc=turbo_code.turbo_code(K)
+        main_func=tc.turbo_code
+
+        '''
+        ここから上は毎回書き換え
+        '''
+
         #seed値の設定
         np.random.seed()
 
@@ -49,7 +84,26 @@ class MC():
         return count_err,count_all,count_biterr,count_bitall
 
 
-    def monte_carlo(self,main_func):
+# In[48]:
+
+
+class MC():
+    def __init__(self):
+        super().__init__()
+        
+        self.TX_antenna=1
+        self.RX_antenna=1
+        self.MAX_ERR=8
+        self.EbNodB_start=-5
+        self.EbNodB_end=1
+        self.EbNodB_range=np.arange(self.EbNodB_start,self.EbNodB_end) 
+
+
+# In[49]:
+
+
+class MC(MC):
+    def monte_carlo(self,K):
         '''
         input:main_func
         -----------
@@ -64,16 +118,18 @@ class MC():
 
         print("from"+str(self.EbNodB_start)+"to"+str(self.EbNodB_end))
         
+        result_ids=[[] for i in range(len(self.EbNodB_range))]
+
         for i,EbNodB in enumerate(self.EbNodB_range):
-            inputs=[(main_func,EbNodB)]
             
-            #multiprocess
-            #if __name__ == "__main__":
-            pool = multiprocessing.Pool(8) # プロセス数を設定
-            result=pool.map(self.output, inputs*self.MAX_ERR)  # 並列演算
-            #resultは長さ1のリストの中にBLER,BERの2つのarrayのtupleが入った配列
-            pool.close()
-            pool.join()
+            for j in range(self.MAX_ERR):
+                #multiprocess    
+                result_ids[i].append(output.remote(K,EbNodB))  # 並列演算
+                #resultは長さ1のリストの中にBLER,BERの2つのarrayのtupleが入った配列
+
+        for i,EbNodB in enumerate(self.EbNodB_range):
+
+            result=ray.get(result_ids[i])
 
             count_err=0
             count_all=0
@@ -95,6 +151,43 @@ class MC():
                 break
 
             print("\r"+"EbNodB="+str(EbNodB)+",BLER="+str(BLER[i])+",BER="+str(BER[i]),end="")
-
         return BLER,BER
+
+# In[46]:
+
+
+#毎回書き換える関数その１
+class savetxt(coding,_AWGN,MC):
+
+  def savetxt(self,BLER,BER):
+
+    with open(self.filename,'w') as f:
+
+        #print("#N="+str(self.N),file=f)
+        print("#TX_antenna="+str(self.TX_antenna),file=f)
+        print("#RX_antenna="+str(self.RX_antenna),file=f)
+        print("#modulation_symbol="+str(self.M),file=f)
+        #print("#MAX_BLERR="+str(self.MAX_ERR),file=f)
+        print("#iteration number="+str(self.L_MAX),file=f)
+        print("#EsNodB,BLER,BER",file=f) 
+        for i in range(len(self.EbNodB_range)):
+            print(str(self.EbNodB_range[i]),str(BLER[i]),str(BER[i]),file=f)
+
+
+# In[50]:
+
+
+K=[400,800,1000]
+for K in K:
+    print("K=",K)
+    mc=MC()
+    BLER,BER=mc.monte_carlo(K)
+    st=savetxt(K)
+    st.savetxt(BLER,BER)
+
+
+# In[ ]:
+
+
+
 
