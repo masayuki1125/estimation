@@ -95,7 +95,7 @@ class MC():
         self.RX_antenna=1
         self.MAX_ERR=8
         self.EbNodB_start=-5
-        self.EbNodB_end=1
+        self.EbNodB_end=3
         self.EbNodB_range=np.arange(self.EbNodB_start,self.EbNodB_end) 
 
 
@@ -177,7 +177,7 @@ class savetxt(coding,_AWGN,MC):
 # In[50]:
 
 
-K=[400,800,1000]
+K=[400,800,1000,2000,4000]
 for K in K:
     print("K=",K)
     mc=MC()
