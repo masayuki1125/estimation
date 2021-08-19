@@ -9,10 +9,10 @@ import ray
 import sys
 sys.path.append("../channel")
 from AWGN import _AWGN
-sys.path.append("../turbo_code")
-from turbo_code import coding
+sys.path.append("../polar_code") #毎回書き換える
+from polar_code import coding
 
-cd=coding(100)
+cd=coding(1024)
 ch=_AWGN()
 
 
@@ -48,10 +48,10 @@ def output(K,EbNodB):
         '''
 
         #import module 
-        sys.path.append("../turbo_code")
-        import turbo_code
-        tc=turbo_code.turbo_code(K)
-        main_func=tc.turbo_code
+        sys.path.append("../polar_code")
+        import polar_code
+        pc=polar_code.polar_code(K)
+        main_func=pc.polar_code
 
         '''
         ここから上は毎回書き換え
@@ -158,6 +158,8 @@ class MC(MC):
 
 #毎回書き換える関数その１
 class savetxt(coding,_AWGN,MC):
+  def __init__(self,N):
+    super().__init__(N)
 
   def savetxt(self,BLER,BER):
 
@@ -168,7 +170,8 @@ class savetxt(coding,_AWGN,MC):
         print("#RX_antenna="+str(self.RX_antenna),file=f)
         print("#modulation_symbol="+str(self.M),file=f)
         #print("#MAX_BLERR="+str(self.MAX_ERR),file=f)
-        print("#iteration number="+str(self.L_MAX),file=f)
+        print("#R="+str(self.R),file=f)
+        #print("#iteration number="+str(self.L_MAX),file=f)
         print("#EsNodB,BLER,BER",file=f) 
         for i in range(len(self.EbNodB_range)):
             print(str(self.EbNodB_range[i]),str(BLER[i]),str(BER[i]),file=f)
@@ -177,9 +180,9 @@ class savetxt(coding,_AWGN,MC):
 # In[50]:
 
 
-K=[400,800,1000,2000,4000]
+K=[512,1024,2048]
 for K in K:
-    print("K=",K)
+    print("N=",K)
     mc=MC()
     BLER,BER=mc.monte_carlo(K)
     st=savetxt(K)
